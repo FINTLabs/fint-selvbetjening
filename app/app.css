@@ -1,15 +1,36 @@
-@import "tailwindcss";
+@layer theme, base, components, utilities;
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+:root {
+  --novari-magenta: #6b133d;
 }
 
-html,
-body {
-  @apply bg-white dark:bg-gray-950;
-
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
+.aksel-theme.novari-theme {
+  --novari-magenta: #6b133d;
+  --novari-header-bg: var(--ax-bg-default);
+  --novari-header-fg: var(--ax-text-default);
+  --novari-footer-bg: #6b133d;
+  --novari-footer-fg: #fcf5ed;
 }
+
+.aksel-theme.novari-theme.light {
+  --novari-header-bg: #fcf5ed;
+  --novari-header-fg: #6b133d;
+}
+
+.novari-header {
+  background: var(--novari-header-bg);
+  color: var(--novari-header-fg);
+}
+
+.novari-header .novari-header-title {
+  color: var(--novari-header-fg);
+}
+
+.novari-footer {
+  background: var(--novari-footer-bg);
+  color: var(--novari-footer-fg);
+}
+

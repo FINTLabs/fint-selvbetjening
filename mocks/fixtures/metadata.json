@@ -1,0 +1,44 @@
+[
+  {
+    "domainName": "arkiv",
+    "packageName": "kodeverk",
+    "resourceName": "journalposttype",
+    "fields": ["gyldighetsperiode", "kode", "navn", "passiv", "systemId"],
+    "idFields": ["systemId"],
+    "writeable": false,
+    "relations": []
+  },
+  {
+    "domainName": "administrasjon",
+    "packageName": "kodeverk",
+    "resourceName": "anlegg",
+    "fields": ["gyldighetsperiode", "kode", "navn", "passiv", "systemId"],
+    "idFields": ["systemId"],
+    "writeable": false,
+    "relations": [
+      {
+        "name": "fullmakt",
+        "multiplicity": "NONE_TO_MANY",
+        "classPackageName": "no.fint.model.administrasjon.fullmakt.Fullmakt"
+      }
+    ]
+  },
+  {
+    "domainName": "utdanning",
+    "packageName": "elev",
+    "resourceName": "elev",
+    "fields": ["fodselsnummer", "navn", "systemId"],
+    "idFields": ["systemId", "fodselsnummer"],
+    "writeable": true,
+    "relations": []
+  },
+  {
+    "domainName": "felles",
+    "packageName": null,
+    "resourceName": "kontaktperson",
+    "fields": ["navn"],
+    "idFields": [],
+    "writeable": false,
+    "relations": []
+  }
+]
