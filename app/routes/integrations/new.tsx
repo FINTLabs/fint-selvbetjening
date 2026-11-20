@@ -1,59 +1,32 @@
-import { DownloadIcon, FilesIcon } from "@navikt/aksel-icons";
-import {
-  BodyLong,
-  Button,
-  Heading,
-  HStack,
-  LocalAlert,
-  Radio,
-  RadioGroup,
-  Stepper,
-  Textarea,
-  TextField,
-  VStack,
-} from "@navikt/ds-react";
-import { useEffect, useState } from "react";
-import { Form, Link, useNavigation } from "react-router";
-
-import { ComponentCategoryGrid } from "~/components/ComponentCategoryGrid";
-import { requireUser } from "~/server/auth.server";
-import { listEnabledComponentsForOrganisation } from "~/server/components.server";
-import { createIntegration } from "~/server/integrations.server";
+import {BodyLong, Heading, LocalAlert, Stepper, VStack,} from "@navikt/ds-react";
+import {useEffect, useState} from "react";
+import {useNavigation} from "react-router";
+import {requireUser} from "~/server/auth.server";
+import {listEnabledComponentsForOrganisation} from "~/server/components.server";
+import {createIntegration} from "~/server/integrations.server";
 import {
   createMaskinportenPayload,
   generateMaskinportenKeyPair,
-  parseMaskinportenPublicJwk,
-  registerMaskinportenClient,
-  registerMaskinportenJwks,
   type MaskinportenClient,
   type MaskinportenPayload,
   type MaskinportenPublicJwk,
+  parseMaskinportenPublicJwk,
+  registerMaskinportenClient,
+  registerMaskinportenJwks,
 } from "~/server/maskinporten.server";
 import {
-  componentLabels,
+  type IntegrationInput,
+  type IntegrationType,
   isIntegrationType,
   knownComponentNames,
-  type ComponentRecord,
-  type IntegrationType,
 } from "~/types/integrations";
-import type { Route } from "./+types/new";
+import type {Route} from "./+types/new";
+import type {ActionData, CreatedState} from "~/routes/integrations/new/types";
+import {KeyStep} from "~/routes/integrations/new/KeyStep";
+import {DetailsStep} from "~/routes/integrations/new/DetailsStep";
+import {DoneStep} from "~/routes/integrations/new/DoneStep";
 
-const DEFAULT_TYPE: IntegrationType = "klient";
 const STEPPER_LABEL = "Steg i opprettelsen";
-
-type CreatedState = {
-  input: { name: string; type: string; components: string[] };
-  payload: MaskinportenPayload;
-  response: MaskinportenClient;
-};
-
-type ActionData = Partial<CreatedState> & {
-  publicJwk?: MaskinportenPublicJwk;
-  privateKeyPem?: string;
-  keySource?: "generated" | "uploaded";
-  error?: string;
-  jwkDraft?: string;
-};
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -73,108 +46,165 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({
-  request,
-}: Route.ActionArgs): Promise<ActionData> {
+                               request,
+                             }: Route.ActionArgs): Promise<ActionData> {
   const user = await requireUser(request);
+
   if (!user.organisation) {
     return {
       error: "Du er ikke tilknyttet en organisasjon.",
     };
   }
+
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "details");
 
-  if (intent === "generate-key" || intent === "upload-key") {
-    const created = readCreatedState(formData);
+  switch (intent) {
+    case "details": {
+      const components = await listEnabledComponentsForOrganisation(
+          user.organisation.id,
+      );
 
-    try {
-      if (intent === "generate-key") {
-        const { publicJwk, privateKeyPem } = generateMaskinportenKeyPair(
-          created.response.client_id,
-          created.input.name,
+      const input: IntegrationInput = {
+        name: String(formData.get("name") ?? "").trim(),
+        description: String(formData.get("description") ?? "").trim(),
+        type: String(formData.get("type") ?? ""),
+        components: knownComponentNames(
+            formData.getAll("components").map(String),
+            components,
+        ),
+      };
+
+      const fieldErrors = {
+        name: input.name ? undefined : "Skriv inn et navn.",
+        description: input.description
+            ? undefined
+            : "Skriv inn en beskrivelse.",
+      };
+
+      if (fieldErrors.name || fieldErrors.description) {
+        return {
+          input,
+          fieldErrors,
+          // error: "Fyll ut navn og beskrivelse før du går videre.",
+        };
+      }
+
+      if (!isIntegrationType(input.type)) {
+        return {
+          input,
+          error: "Velg en gyldig integrasjonstype.",
+        };
+      }
+
+      try {
+        const payload = createMaskinportenPayload(
+            input,
+            components,
+            user,
         );
+
+        const response = await registerMaskinportenClient(payload);
+
+        await createIntegration({
+          name: input.name,
+          description: input.description,
+          type: input.type,
+          components: input.components,
+          clientId: response.client_id,
+          organisationId: user.organisation.id,
+        });
+
+        return { input, payload, response };
+      } catch (error) {
+        return {
+          input,
+          error: error instanceof Error
+              ? error.message
+              : "Kunne ikke registrere klienten i Maskinporten.",
+        };
+      }
+    }
+
+    case "generate-key": {
+      let created: CreatedState | undefined;
+
+      try {
+        created = readCreatedState(formData);
+
+        const { publicJwk, privateKeyPem } =
+            generateMaskinportenKeyPair(
+                created.response.client_id,
+                created.input.name,
+            );
+
         await registerMaskinportenJwks(
-          created.response.client_id,
-          publicJwk,
+            created.response.client_id,
+            publicJwk,
         );
+
         return {
           ...created,
           publicJwk,
           privateKeyPem,
           keySource: "generated",
         };
-      }
-
-      const parsed = parseMaskinportenPublicJwk(
-        String(formData.get("publicJwk") ?? ""),
-        created.response.client_id,
-        created.input.name,
-      );
-
-      if (!parsed.ok) {
+      } catch (error) {
         return {
           ...created,
-          error: parsed.error,
-          jwkDraft: String(formData.get("publicJwk") ?? ""),
+          error: error instanceof Error
+              ? error.message
+              : "Kunne ikke generere eller registrere nøkkelen.",
         };
       }
-
-      await registerMaskinportenJwks(
-        created.response.client_id,
-        parsed.jwk,
-      );
-      return {
-        ...created,
-        publicJwk: parsed.jwk,
-        keySource: "uploaded",
-      };
-    } catch (error) {
-      return {
-        ...created,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Kunne ikke registrere nøkkelen i Maskinporten.",
-        jwkDraft: String(formData.get("publicJwk") ?? ""),
-      };
-    }
-  }
-
-  const components = await listEnabledComponentsForOrganisation(
-    user.organisation.id,
-  );
-  const input = {
-    name: String(formData.get("name")),
-    type: String(formData.get("type")),
-    components: knownComponentNames(
-      formData.getAll("components").map(String),
-      components,
-    ),
-  };
-
-  try {
-    const payload = createMaskinportenPayload(input, components, user);
-    const response = await registerMaskinportenClient(payload);
-
-    if (isIntegrationType(input.type)) {
-      await createIntegration({
-        name: input.name,
-        type: input.type,
-        components: input.components,
-        clientId: response.client_id,
-        organisationId: user.organisation.id,
-      });
     }
 
-    return { input, payload, response };
-  } catch (error) {
-    return {
-      input,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Kunne ikke registrere klienten i Maskinporten.",
-    };
+    case "upload-key": {
+      let created: CreatedState | undefined;
+      const jwkDraft = String(formData.get("publicJwk") ?? "");
+
+      try {
+        created = readCreatedState(formData);
+
+        const parsed = parseMaskinportenPublicJwk(
+            jwkDraft,
+            created.response.client_id,
+            created.input.name,
+        );
+
+        if (!parsed.ok) {
+          return {
+            ...created,
+            error: parsed.error,
+            jwkDraft,
+          };
+        }
+
+        await registerMaskinportenJwks(
+            created.response.client_id,
+            parsed.jwk,
+        );
+
+        return {
+          ...created,
+          publicJwk: parsed.jwk,
+          keySource: "uploaded",
+        };
+      } catch (error) {
+        return {
+          ...created,
+          jwkDraft,
+          error: error instanceof Error
+              ? error.message
+              : "Kunne ikke registrere nøkkelen i Maskinporten.",
+        };
+      }
+    }
+
+    default:
+      return {
+        error: "Ukjent handling. Last siden på nytt og prøv igjen.",
+      };
   }
 }
 
@@ -266,14 +296,15 @@ export default function NewIntegration({
       </Stepper>
 
       {activeStep === 1 && (
-        <DetailsStep
-          input={input}
-          components={components}
-          created={created}
-          error={actionData?.error}
-          isSubmitting={submittingIntent === "details"}
-          onNext={() => goToStep(2)}
-        />
+          <DetailsStep
+              input={input}
+              components={components}
+              created={created}
+              error={actionData?.error}
+              fieldErrors={actionData?.fieldErrors}
+              isSubmitting={submittingIntent === "details"}
+              onNext={() => goToStep(2)}
+          />
       )}
 
       {activeStep === 2 &&
@@ -310,355 +341,17 @@ export default function NewIntegration({
   );
 }
 
-function DetailsStep({
-  input,
-  components,
-  created,
-  error,
-  isSubmitting,
-  onNext,
-}: {
-  input?: { name: string; type: string; components: string[] };
-  components: ComponentRecord[];
-  created: boolean;
-  error?: string;
-  isSubmitting: boolean;
-  onNext: () => void;
-}) {
-  return (
-    <Form method="post">
-      <input type="hidden" name="intent" value="details" />
-      <VStack gap="space-24">
-        {error && !created && (
-          <LocalAlert status="error">
-            <LocalAlert.Header>
-              <LocalAlert.Title>Kunne ikke opprette klient</LocalAlert.Title>
-            </LocalAlert.Header>
-            <LocalAlert.Content>
-              <BodyLong>{error}</BodyLong>
-            </LocalAlert.Content>
-          </LocalAlert>
-        )}
-
-        <TextField
-          name="name"
-          label="Navn"
-          defaultValue={input?.name}
-          autoComplete="off"
-          htmlSize={32}
-          readOnly={created}
-        />
-
-        <RadioGroup
-          legend="Type"
-          name="type"
-          defaultValue={input?.type ?? DEFAULT_TYPE}
-          readOnly={created}
-        >
-          <Radio value="klient">Klient</Radio>
-          <Radio value="adapter">Adapter</Radio>
-        </RadioGroup>
-
-        {components.length === 0 ? (
-          <LocalAlert status="warning">
-            <LocalAlert.Header>
-              <LocalAlert.Title>Ingen komponenter er slått på</LocalAlert.Title>
-            </LocalAlert.Header>
-            <LocalAlert.Content>
-              <BodyLong>
-                Slå på komponenter under{" "}
-                <Link to="/komponenter">Komponenter</Link> før du oppretter en
-                integrasjon.
-              </BodyLong>
-            </LocalAlert.Content>
-          </LocalAlert>
-        ) : (
-          <VStack gap="space-8">
-            <Heading size="small" level="2">
-              Komponenter
-            </Heading>
-            <ComponentCategoryGrid
-              components={components}
-              checkboxName="components"
-              defaultValue={input?.components}
-              readOnly={created}
-              showChevron
-            />
-          </VStack>
-        )}
-
-        <HStack justify="end">
-          {created ? (
-            <Button type="button" onClick={onNext}>
-              Neste
-            </Button>
-          ) : (
-            <Button type="submit" loading={isSubmitting}>
-              Neste
-            </Button>
-          )}
-        </HStack>
-      </VStack>
-    </Form>
-  );
-}
-
-function KeyStep({
-  created,
-  isGenerating,
-  isUploading,
-  onBack,
-}: {
-  created: CreatedState & Pick<ActionData, "error" | "jwkDraft">;
-  isGenerating: boolean;
-  isUploading: boolean;
-  onBack: () => void;
-}) {
-  const [method, setMethod] = useState<"generate" | "own">(
-    created.jwkDraft ? "own" : "generate",
-  );
-
-  useEffect(() => {
-    if (created.jwkDraft) {
-      setMethod("own");
-    }
-  }, [created.jwkDraft]);
-
-  return (
-    <Form method="post">
-      <input
-        type="hidden"
-        name="intent"
-        value={method === "own" ? "upload-key" : "generate-key"}
-      />
-      <HiddenCreatedFields created={created} />
-      <VStack gap="space-24">
-        <Heading size="medium" level="2">
-          Nøkkeloppsett
-        </Heading>
-        <RadioGroup
-          legend="Hvordan vil du legge til nøkkel?"
-          value={method}
-          onChange={setMethod}
-        >
-          <Radio
-            value="generate"
-            description="Vi genererer et nytt nøkkelpar. Den offentlige nøkkelen registreres i Maskinporten."
-          >
-            Generer nøkkel for meg
-          </Radio>
-          <Radio value="own">Bruk egen offentlig nøkkel</Radio>
-        </RadioGroup>
-        {method === "own" && (
-          <Textarea
-            name="publicJwk"
-            label="Offentlig nøkkel (JWK)"
-            description="Lim inn den offentlige nøkkelen som JWK eller JWKS. Den private nøkkelen skal ikke lastes opp."
-            defaultValue={created.jwkDraft ?? ""}
-            minRows={8}
-            error={method === "own" ? created.error : undefined}
-            spellCheck={false}
-          />
-        )}
-        {created.error && method !== "own" && (
-          <LocalAlert status="error">
-            <LocalAlert.Header>
-              <LocalAlert.Title>Kunne ikke registrere nøkkel</LocalAlert.Title>
-            </LocalAlert.Header>
-            <LocalAlert.Content>
-              <BodyLong>{created.error}</BodyLong>
-            </LocalAlert.Content>
-          </LocalAlert>
-        )}
-        <HStack justify="space-between">
-          <Button type="button" variant="secondary" onClick={onBack}>
-            Forrige
-          </Button>
-          <Button
-            type="submit"
-            loading={method === "own" ? isUploading : isGenerating}
-          >
-            Fortsett
-          </Button>
-        </HStack>
-      </VStack>
-    </Form>
-  );
-}
-
-function HiddenCreatedFields({ created }: { created: CreatedState }) {
-  return (
-    <>
-      <input type="hidden" name="name" value={created.input.name} />
-      <input type="hidden" name="type" value={created.input.type} />
-      {created.input.components.map((component) => (
-        <input
-          key={component}
-          type="hidden"
-          name="components"
-          value={component}
-        />
-      ))}
-      <input
-        type="hidden"
-        name="payload"
-        value={JSON.stringify(created.payload)}
-      />
-      <input
-        type="hidden"
-        name="response"
-        value={JSON.stringify(created.response)}
-      />
-    </>
-  );
-}
-
-function DoneStep({
-  name,
-  type,
-  components,
-  componentOptions,
-  clientId,
-  keySource,
-  privateKeyPem,
-  onBack,
-}: {
-  name: string;
-  type: string;
-  components: string[];
-  componentOptions: ComponentRecord[];
-  clientId: string;
-  keySource?: "generated" | "uploaded";
-  privateKeyPem?: string;
-  onBack: () => void;
-}) {
-  const generatedKey = keySource === "generated" && Boolean(privateKeyPem);
-
-  return (
-    <VStack gap="space-24">
-      <LocalAlert status="success">
-        <LocalAlert.Header>
-          <LocalAlert.Title>Integrasjonen er opprettet</LocalAlert.Title>
-        </LocalAlert.Header>
-        <LocalAlert.Content>
-          <BodyLong>
-            {name} ({typeLabel(type)}) er klar. Client ID: {clientId}.
-            {components.length > 0
-              ? ` Komponenter: ${componentLabels(components, componentOptions)}.`
-              : ""}
-          </BodyLong>
-        </LocalAlert.Content>
-      </LocalAlert>
-
-      <LocalAlert status="warning">
-        <LocalAlert.Header>
-          <LocalAlert.Title>Lagre den private nøkkelen nå</LocalAlert.Title>
-        </LocalAlert.Header>
-        <LocalAlert.Content>
-          <BodyLong>
-            {generatedKey
-              ? "Nøkkelen lagres ikke i databasen. Kopier eller last den ned og oppbevar den trygt. Du får den ikke vist igjen."
-              : "Den private nøkkelen ble ikke lastet opp, og den lagres ikke i databasen. Du må selv sørge for at du har den lagret."}
-          </BodyLong>
-        </LocalAlert.Content>
-      </LocalAlert>
-
-      {keySource === "generated" && privateKeyPem && (
-        <PrivateKeySave name={name} privateKeyPem={privateKeyPem} />
-      )}
-
-      <HStack justify="space-between">
-        <Button type="button" variant="secondary" onClick={onBack}>
-          Forrige
-        </Button>
-        <Button as={Link} to="/integrasjoner">
-          Til integrasjoner
-        </Button>
-      </HStack>
-    </VStack>
-  );
-}
-
-function PrivateKeySave({
-  name,
-  privateKeyPem,
-}: {
-  name: string;
-  privateKeyPem: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copyKey() {
-    await navigator.clipboard.writeText(privateKeyPem);
-    setCopied(true);
-  }
-
-  function downloadKey() {
-    const blob = new Blob([privateKeyPem], { type: "application/x-pem-file" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${keyFileName(name)}.pem`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <VStack gap="space-8">
-      <Textarea
-        label="Privat nøkkel"
-        value={privateKeyPem}
-        readOnly
-        minRows={8}
-        spellCheck={false}
-      />
-      <HStack gap="space-8">
-        <Button
-          type="button"
-          variant="secondary"
-          icon={<FilesIcon aria-hidden />}
-          onClick={() => void copyKey()}
-        >
-          {copied ? "Kopiert" : "Kopier nøkkel"}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          icon={<DownloadIcon aria-hidden />}
-          onClick={downloadKey}
-        >
-          Last ned
-        </Button>
-      </HStack>
-    </VStack>
-  );
-}
-
 function readCreatedState(formData: FormData): CreatedState {
   return {
     input: {
       name: String(formData.get("name")),
       type: String(formData.get("type")),
       components: formData.getAll("components").map(String),
+      description: String(formData.get("description")),
     },
     payload: JSON.parse(String(formData.get("payload"))) as MaskinportenPayload,
     response: JSON.parse(
       String(formData.get("response")),
     ) as MaskinportenClient,
   };
-}
-
-function typeLabel(type: string) {
-  return type === "adapter" ? "Adapter" : "Klient";
-}
-
-function keyFileName(value: string) {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 32) || "integrasjon"
-  );
 }

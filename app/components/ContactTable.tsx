@@ -18,6 +18,8 @@ type ContactTableProps = {
   emptyDescription: string;
   showAdmin?: boolean;
   headerAction?: ReactNode;
+  children?: ReactNode;
+  renderActions?: (contact: UserRecord) => ReactNode;
 };
 
 export function ContactTable({
@@ -27,6 +29,8 @@ export function ContactTable({
   emptyDescription,
   showAdmin = false,
   headerAction,
+  children,
+  renderActions,
 }: ContactTableProps) {
   return (
     <VStack gap="space-16" paddingBlock="space-24">
@@ -34,6 +38,8 @@ export function ContactTable({
         <Heading size="large">{title}</Heading>
         {headerAction}
       </HStack>
+
+      {children}
 
       {contacts.length === 0 ? (
         <LocalAlert status="announcement">
@@ -56,6 +62,9 @@ export function ContactTable({
               <Table.HeaderCell scope="col">E-post</Table.HeaderCell>
               <Table.HeaderCell scope="col">Mobil</Table.HeaderCell>
               <Table.HeaderCell scope="col">NIN</Table.HeaderCell>
+              {renderActions ? (
+                  <Table.HeaderCell scope="col">Handlinger</Table.HeaderCell>
+              ) : null}
             </Table.Row>
           </Table.Header>
           <Table.Body>
@@ -85,6 +94,9 @@ export function ContactTable({
                 <Table.DataCell>{contact.mail}</Table.DataCell>
                 <Table.DataCell>{contact.mobile ?? "—"}</Table.DataCell>
                 <Table.DataCell>{contact.nin}</Table.DataCell>
+                {renderActions ? (
+                    <Table.DataCell>{renderActions(contact)}</Table.DataCell>
+                ) : null}
               </Table.Row>
             ))}
           </Table.Body>

@@ -15,4 +15,7 @@ export default defineConfig({
     setupFiles: "./test/setup.ts",
     include: ["app/**/*.test.{ts,tsx}", "mocks/**/*.test.{ts,tsx}"],
   },
+  cacheDir: process.env.PLAYWRIGHT_TEST === "true"
+      ? "node_modules/.vite-playwright"
+      : "node_modules/.vite",
 });

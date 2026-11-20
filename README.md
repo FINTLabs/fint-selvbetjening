@@ -91,13 +91,14 @@ Users belong to organisations through `organisation_users`. Seed organisation:
 {
   "name": "jennifer_test",
   "displayName": "Test Organisation 1",
-  "orgNumber": "123456789"
+  "orgNumber": "123456789",
+  "primaryAssetId": null
 }
 ```
 
 Calvin Ball is a member of that organisation. Jennifer Maarberg is also a member of **Test Organisation 2**. The header shows a company dropdown when the user belongs to more than one organisation. The last choice is stored in the `organisation` cookie for two weeks.
 
-Admin users have `is_admin` set. **Jennifer Maarberg** (`x-nin: 987654321`) is an admin and gets an extra **Admin** menu: all contacts, all organisations, and create organisation. The ordinary **Kontakter** list is only people in the current organisation.
+`users.is_admin` grants access to the platform-wide **Admin** menu. **Jennifer Maarberg** (`x-nin: 987654321`) has this access. The admin contact list shows the **Admin** tag when a contact has `organisation_users.is_admin` set for at least one membership. The contact detail page shows the status on each membership. Migration 011 copies existing admin flags to current memberships. New memberships default to non-admin. The ordinary **Kontakter** list only shows people in the current organisation.
 
 The `components` table holds FINT components (`name`, `description`, `category`, `base_path`). Category is the first segment of the path, e.g. `/administrasjon/fullmakt` → `administrasjon`. `/komponenter` lists the catalog so the current organisation can turn components on. Which ones are on is stored in `organisation_components`. The new-integration form only shows components that are on for the current organisation.
 
@@ -108,6 +109,19 @@ Init SQL only runs on an **empty** volume. To recreate from the cleaned files:
 ```bash
 docker compose down -v && docker compose up -d db
 ```
+
+Apply any pending organisation migrations in order to an existing local volume:
+
+```bash
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U selvbetjening -d selvbetjening < db/init/008_add_organisation_legal_contact.sql
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U selvbetjening -d selvbetjening < db/init/009_require_legal_contact_membership.sql
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U selvbetjening -d selvbetjening < db/init/010_add_organisation_primary_asset_id.sql
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U selvbetjening -d selvbetjening < db/init/011_add_organisation_membership_admin.sql
+```
+
+`primary_asset_id` stores the organisation's domain, for example `rfk.no`. Existing organisations have a null value until a domain is supplied.
+
+When creating an organisation, enter its display name, organisation number, and domain. The domain becomes its primary asset ID, and the technical name replaces the dots with underscores, for example `rfk_no`. New organisations start without a legal contact. Open an organisation from the list to view its details, legal contact, and contact list. The management controls on that page, the **Velg juridisk kontakt** button, and the organisation row menu are placeholders. Migration 009 clears legal contact assignments to nonmembers.
 
 ### Start Postgres
 

@@ -11,6 +11,7 @@ export type ComponentRecord = {
 
 export type IntegrationInput = {
   name: string;
+  description: string;
   type: string;
   components: string[];
 };
@@ -18,6 +19,7 @@ export type IntegrationInput = {
 export type Integration = {
   id: string;
   name: string;
+  description: string;
   type: IntegrationType;
   components: string[];
   clientId?: string;

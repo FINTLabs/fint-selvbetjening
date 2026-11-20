@@ -1,16 +1,9 @@
-import {
-  BodyLong,
-  Button,
-  Heading,
-  HStack,
-  LocalAlert,
-  TextField,
-  VStack,
-} from "@navikt/ds-react";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { data, redirect } from "react-router";
 
-import { createOrganisation } from "~/server/organisations.server";
 import { requireAdmin } from "~/server/auth.server";
+import { createOrganisation } from "~/server/organisations.server";
+
+import { OrganisationForm, readOrganisationForm, type OrganisationFormActionData } from "./OrganisationForm";
 import type { Route } from "./+types/new";
 
 export function meta({}: Route.MetaArgs) {
@@ -20,106 +13,47 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-type ActionData = {
-  error?: string;
-  values?: {
-    name: string;
-    displayName: string;
-    orgNumber: string;
-  };
-};
-
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAdmin(request);
   return {};
 }
 
-export async function action({
-  request,
-}: Route.ActionArgs): Promise<ActionData | Response> {
+export async function action({ request }: Route.ActionArgs) {
   await requireAdmin(request);
-  const formData = await request.formData();
-  const name = String(formData.get("name") ?? "").trim();
-  const displayName = String(formData.get("displayName") ?? "").trim();
-  const orgNumber = String(formData.get("orgNumber") ?? "").trim();
+  const { values, errors } = readOrganisationForm(await request.formData(), "create");
 
-  if (!name || !displayName || !orgNumber) {
-    return {
-      error: "Fyll ut visningsnavn, kortnavn og organisasjonsnummer.",
-      values: { name, displayName, orgNumber },
-    };
+  if (Object.keys(errors).length) {
+    return data<OrganisationFormActionData>({ errors, values }, { status: 400 });
   }
 
+  const primaryAssetId = values.primaryAssetId.toLowerCase();
   try {
-    await createOrganisation({ name, displayName, orgNumber });
+    await createOrganisation({
+      name: primaryAssetId.replaceAll(".", "_"),
+      displayName: values.displayName,
+      orgNumber: values.orgNumber,
+      primaryAssetId,
+    });
   } catch (error) {
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Kunne ikke opprette organisasjonen.",
-      values: { name, displayName, orgNumber },
-    };
+    return data<OrganisationFormActionData>(
+      {
+        saveError: error instanceof Error ? error.message : "Kunne ikke opprette organisasjonen.",
+        values,
+      },
+      { status: 400 },
+    );
   }
 
   return redirect("/admin/organisasjoner");
 }
 
-export default function NewOrganisation({
-  actionData,
-}: Route.ComponentProps) {
-  const navigation = useNavigation();
-  const submitting = navigation.state === "submitting";
-
+export default function NewOrganisation({ actionData }: Route.ComponentProps) {
   return (
-    <VStack gap="space-16" paddingBlock="space-24">
-      <Heading size="large">Ny organisasjon</Heading>
-      <BodyLong>
-        Opprett en organisasjon. Brukere kan knyttes til den etterpå.
-      </BodyLong>
-
-      {actionData?.error ? (
-        <LocalAlert status="error">
-          <LocalAlert.Header>
-            <LocalAlert.Title>Kunne ikke opprette</LocalAlert.Title>
-          </LocalAlert.Header>
-          <LocalAlert.Content>
-            <BodyLong>{actionData.error}</BodyLong>
-          </LocalAlert.Content>
-        </LocalAlert>
-      ) : null}
-
-      <Form method="post">
-        <VStack gap="space-16">
-          <TextField
-            name="displayName"
-            label="Visningsnavn"
-            defaultValue={actionData?.values?.displayName}
-            autoComplete="off"
-          />
-          <TextField
-            name="name"
-            label="Kortnavn"
-            description="Teknisk navn, for eksempel jennifer_test"
-            defaultValue={actionData?.values?.name}
-            autoComplete="off"
-          />
-          <TextField
-            name="orgNumber"
-            label="Organisasjonsnummer"
-            defaultValue={actionData?.values?.orgNumber}
-            autoComplete="off"
-          />
-          <HStack gap="space-8">
-            <Button type="submit" loading={submitting}>
-              Opprett
-            </Button>
-            <Button as={Link} to="/admin/organisasjoner" variant="secondary">
-              Avbryt
-            </Button>
-          </HStack>
-        </VStack>
-      </Form>
-    </VStack>
+    <OrganisationForm
+      mode="create"
+      values={actionData?.values}
+      errors={actionData?.errors}
+      saveError={actionData?.saveError}
+    />
   );
 }

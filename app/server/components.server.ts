@@ -30,6 +30,18 @@ export async function listComponents(): Promise<ComponentRecord[]> {
   return rows.map(toComponentRecord);
 }
 
+export async function getComponentById(id: string): Promise<ComponentRecord | null> {
+  const [component] = await query<ComponentRow>(
+    `
+      select id, name, description, category, base_path
+      from components
+      where id::text = $1
+    `,
+    [id],
+  );
+  return component ? toComponentRecord(component) : null;
+}
+
 export async function listEnabledComponentsForOrganisation(
   organisationId: string,
 ): Promise<ComponentRecord[]> {

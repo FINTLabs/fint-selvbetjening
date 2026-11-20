@@ -9,7 +9,7 @@ import {
   Tag,
   VStack,
 } from "@navikt/ds-react";
-import { Link } from "react-router";
+import {Link, useNavigate} from "react-router";
 
 import { listComponents } from "~/server/components.server";
 import { listIntegrationsForOrganisation } from "~/server/integrations.server";
@@ -50,6 +50,7 @@ function typeLabel(type: Integration["type"]) {
 
 export default function IntegrationsList({ loaderData }: Route.ComponentProps) {
   const { integrations, components, hasOrganisation } = loaderData;
+  const navigate = useNavigate();
 
   return (
     <VStack gap="space-16" paddingBlock="space-24">
@@ -97,8 +98,15 @@ export default function IntegrationsList({ loaderData }: Route.ComponentProps) {
           </Table.Header>
           <Table.Body>
             {integrations.map((integration) => (
-              <Table.Row key={integration.id}>
-                <Table.HeaderCell scope="row">{integration.name}</Table.HeaderCell>
+                <Table.Row
+                    key={integration.id}
+                    onRowClick={() =>
+                        navigate(`/integrasjoner/${integration.id}`)
+                    }
+                >
+                <Table.HeaderCell scope="row">
+                    {integration.name}
+                </Table.HeaderCell>
                 <Table.DataCell>
                   <Tag
                     size="small"

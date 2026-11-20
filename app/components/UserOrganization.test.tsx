@@ -25,6 +25,7 @@ function createUser(
     name: organisation.name,
     displayName: organisation.displayName,
     orgNumber: `${index + 1}`,
+    primaryAssetId: null,
   }));
 
   return {

@@ -26,12 +26,16 @@ const twoOrgs = [
     name: "jennifer_test",
     displayName: "Test Organisation 1",
     orgNumber: "123456789",
+    primaryAssetId: null,
+    isAdmin: false,
   },
   {
     id: "org-2",
     name: "test_org_2",
     displayName: "Test Organisation 2",
     orgNumber: "555555555",
+    primaryAssetId: null,
+    isAdmin: true,
   },
 ];
 

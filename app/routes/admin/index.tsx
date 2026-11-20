@@ -12,7 +12,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function AdminPage() {
     return (
         <VStack gap="space-24" paddingBlock="space-24">
-            <Heading size="large">Admin</Heading>
+            <Heading size="large">Admin Page (work in progress)</Heading>
 
             <VStack gap="space-16">
                 <AkselLink as={Link} to="/admin/kontakter">
@@ -23,6 +23,9 @@ export default function AdminPage() {
                 </AkselLink>
                 <AkselLink as={Link} to="/admin/komponenter">
                     Komponenter
+                </AkselLink>
+                <AkselLink as={Link} to="/admin/integrasjoner">
+                    Integrasjoner
                 </AkselLink>
             </VStack>
         </VStack>

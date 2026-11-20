@@ -4,8 +4,6 @@ import {
   Heading,
   HStack,
   LocalAlert,
-  Select,
-  TextField,
   VStack,
 } from "@navikt/ds-react";
 import { Form, Link, redirect, useNavigation } from "react-router";
@@ -17,6 +15,13 @@ import {
 } from "~/server/organisations.server";
 import { createUser } from "~/server/users.server";
 import type { Route } from "./+types/new";
+import { OrganisationSelect } from "./OrganisationSelect";
+import {
+  ContactFields,
+  readContactFields,
+  getContactFieldErrors,
+  type ContactFieldValues,
+} from "./ContactFields";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -25,18 +30,13 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-type ContactValues = {
-  firstName: string;
-  lastName: string;
-  mail: string;
-  nin: string;
-  mobile: string;
-  organisationId: string;
-};
+type ContactValues = ContactFieldValues & { organisationIds: string[] };
 
 type ActionData = {
   error?: string;
   values?: ContactValues;
+  contactErrors?: ReturnType<typeof getContactFieldErrors>;
+  organisationError?: string;
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -50,32 +50,29 @@ export async function action({
   await requireAdmin(request);
   const formData = await request.formData();
   const values: ContactValues = {
-    firstName: String(formData.get("firstName") ?? "").trim(),
-    lastName: String(formData.get("lastName") ?? "").trim(),
-    mail: String(formData.get("mail") ?? "").trim(),
-    nin: String(formData.get("nin") ?? "").trim(),
-    mobile: String(formData.get("mobile") ?? "").trim(),
-    organisationId: String(formData.get("organisationId") ?? "").trim(),
+    ...readContactFields(formData),
+    organisationIds: [
+      ...new Set(
+        formData.getAll("organisationIds").map((value) => String(value)),
+      ),
+    ],
   };
 
-  if (
-    !values.firstName ||
-    !values.lastName ||
-    !values.mail ||
-    !values.nin ||
-    !values.organisationId
-  ) {
-    return {
-      error: "Fyll ut fornavn, etternavn, e-post, fødselsnummer og organisasjon.",
-      values,
-    };
+  const contactErrors = getContactFieldErrors(values);
+  const organisationError = values.organisationIds.length === 0
+      ? "Velg minst én organisasjon."
+      : undefined;
+
+  if (Object.keys(contactErrors).length > 0 || organisationError) {
+    return { values, contactErrors, organisationError };
   }
 
-  const organisation = await getOrganisationById(values.organisationId);
+  const organisation = await getOrganisationById(values.organisationIds[0]);
   if (!organisation) {
     return {
       error: "Velg en gyldig organisasjon.",
       values,
+      contactErrors,
     };
   }
 
@@ -86,12 +83,14 @@ export async function action({
       mail: values.mail,
       nin: values.nin,
       mobile: values.mobile || null,
-      organisationId: values.organisationId,
+      organisationIds: values.organisationIds,
     });
   } catch (error) {
     return {
       error:
-        error instanceof Error ? error.message : "Kunne ikke opprette kontakten.",
+        error instanceof Error
+          ? error.message
+          : "Kunne ikke opprette kontakten.",
       values,
     };
   }
@@ -111,9 +110,7 @@ export default function NewContact({
   return (
     <VStack gap="space-16" paddingBlock="space-24">
       <Heading size="large">Ny kontakt</Heading>
-      <BodyLong>
-        Opprett en kontakt og knytt den til en organisasjon.
-      </BodyLong>
+      <BodyLong>Opprett en kontakt og knytt den til en organisasjon.</BodyLong>
 
       {organisations.length === 0 ? (
         <LocalAlert status="warning">
@@ -141,59 +138,23 @@ export default function NewContact({
 
       <Form method="post">
         <VStack gap="space-16">
-          <TextField
-            name="firstName"
-            label="Fornavn"
-            defaultValue={values?.firstName}
-            autoComplete="given-name"
+          <ContactFields values={values} errors={actionData?.contactErrors} />
+          <OrganisationSelect
+              size="small"
+              organisations={organisations}
+              defaultSelectedIds={values?.organisationIds ?? []}
+              error={actionData?.organisationError}
           />
-          <TextField
-            name="lastName"
-            label="Etternavn"
-            defaultValue={values?.lastName}
-            autoComplete="family-name"
-          />
-          <TextField
-            name="mail"
-            label="E-post"
-            type="email"
-            defaultValue={values?.mail}
-            autoComplete="email"
-          />
-          <TextField
-            name="nin"
-            label="Fødselsnummer"
-            defaultValue={values?.nin}
-            autoComplete="off"
-          />
-          <TextField
-            name="mobile"
-            label="Mobil"
-            defaultValue={values?.mobile}
-            autoComplete="tel"
-          />
-          <Select
-            name="organisationId"
-            label="Organisasjon"
-            defaultValue={values?.organisationId ?? ""}
-            disabled={organisations.length === 0}
-          >
-            <option value="">Velg organisasjon</option>
-            {organisations.map((organisation) => (
-              <option key={organisation.id} value={organisation.id}>
-                {organisation.displayName}
-              </option>
-            ))}
-          </Select>
           <HStack gap="space-8">
             <Button
               type="submit"
+              size="small"
               loading={submitting}
               disabled={organisations.length === 0}
             >
               Opprett
             </Button>
-            <Button as={Link} to="/admin/kontakter" variant="secondary">
+            <Button as={Link} to="/admin/kontakter" variant="secondary" size="small">
               Avbryt
             </Button>
           </HStack>

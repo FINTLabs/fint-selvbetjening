@@ -103,3 +103,12 @@ export default function LinkWalkerRoute() {
         </>
     );
 }
+
+export function ErrorBoundary({ error }: { error: Error }) {
+    return (
+        <Box padding="space-16">
+            <Heading size="medium">Noe gikk galt</Heading>
+            <BodyShort>{error.message}</BodyShort>
+        </Box>
+    );
+}

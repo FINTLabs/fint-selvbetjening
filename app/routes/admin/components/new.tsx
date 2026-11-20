@@ -31,7 +31,8 @@ type ComponentValues = {
 };
 
 type ActionData = {
-  error?: string;
+  saveError?: string;
+  errors?: Partial<Record<keyof ComponentValues, string>>;
   values?: ComponentValues;
 };
 
@@ -52,12 +53,17 @@ export async function action({
   };
   const category = categoryFromBasePath(values.basePath);
 
-  if (!values.name || !values.description || !values.basePath || !category) {
-    return {
-      error:
-        "Fyll ut navn, beskrivelse og sti. Stien må ha minst ett ledd, for eksempel /administrasjon/fullmakt.",
-      values,
-    };
+  const errors: NonNullable<ActionData["errors"]> = {};
+  if (!values.name) errors.name = "Skriv inn navn.";
+  if (!values.description) errors.description = "Skriv inn beskrivelse.";
+  if (!values.basePath) {
+    errors.basePath = "Skriv inn sti.";
+  } else if (!category) {
+    errors.basePath = "Stien må ha minst ett ledd, for eksempel /administrasjon/fullmakt.";
+  }
+
+  if (Object.keys(errors).length) {
+    return { errors, values };
   }
 
   try {
@@ -69,7 +75,7 @@ export async function action({
     });
   } catch (error) {
     return {
-      error:
+      saveError:
         error instanceof Error
           ? error.message
           : "Kunne ikke opprette komponenten.",
@@ -91,13 +97,13 @@ export default function NewComponent({ actionData }: Route.ComponentProps) {
         Opprett en FINT-komponent. Kategori settes fra første ledd i stien.
       </BodyLong>
 
-      {actionData?.error ? (
+      {actionData?.saveError ? (
         <LocalAlert status="error">
           <LocalAlert.Header>
             <LocalAlert.Title>Kunne ikke opprette</LocalAlert.Title>
           </LocalAlert.Header>
           <LocalAlert.Content>
-            <BodyLong>{actionData.error}</BodyLong>
+            <BodyLong>{actionData.saveError}</BodyLong>
           </LocalAlert.Content>
         </LocalAlert>
       ) : null}
@@ -106,30 +112,39 @@ export default function NewComponent({ actionData }: Route.ComponentProps) {
         <VStack gap="space-16">
           <TextField
             name="name"
+            size="small"
             label="Navn"
             description="Teknisk navn, for eksempel fullmakt"
             defaultValue={actionData?.values?.name}
             autoComplete="off"
+            aria-required
+            error={actionData?.errors?.name}
           />
           <TextField
             name="description"
+            size="small"
             label="Beskrivelse"
             description="Visningsnavn, for eksempel Administrasjon Fullmakt"
             defaultValue={actionData?.values?.description}
             autoComplete="off"
+            aria-required
+            error={actionData?.errors?.description}
           />
           <TextField
             name="basePath"
+            size="small"
             label="Sti"
             description="For eksempel /administrasjon/fullmakt"
             defaultValue={actionData?.values?.basePath}
             autoComplete="off"
+            aria-required
+            error={actionData?.errors?.basePath}
           />
           <HStack gap="space-8">
-            <Button type="submit" loading={submitting}>
+            <Button type="submit" size="small" loading={submitting}>
               Opprett
             </Button>
-            <Button as={Link} to="/admin/komponenter" variant="secondary">
+            <Button as={Link} to="/admin/komponenter" variant="secondary" size="small">
               Avbryt
             </Button>
           </HStack>

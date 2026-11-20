@@ -7,6 +7,7 @@ import type { ComponentRecord, IntegrationInput } from "~/types/integrations";
 export type MaskinportenPayload = {
   integration_type: "maskinporten";
   client_name: string;
+  description: string;
   token_endpoint_auth_method: "private_key_jwt";
   grant_types: string[];
   scopes: string[];
@@ -45,6 +46,7 @@ export function createMaskinportenPayload(
   return {
     integration_type: "maskinporten",
     client_name: input.name,
+    description: input.description,
     token_endpoint_auth_method: "private_key_jwt",
     grant_types: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
     scopes,

@@ -1,5 +1,5 @@
 // import { LinkBrokenIcon } from '@navikt/aksel-icons';
-import { BodyShort, Heading, HStack, InfoCard, Pagination, Select, VStack } from '@navikt/ds-react';
+import {BodyShort, Box, Heading, HStack, InfoCard, Pagination, Select, VStack} from '@navikt/ds-react';
 import { type LoaderFunctionArgs, useLoaderData, useLocation, useSearchParams } from 'react-router';
 
 import LinkWalkerIntegrationApi from '~/data/LinkWalkerIntegrationApi';
@@ -259,5 +259,14 @@ export default function LinkWalkerErrorsRoute() {
                 )}
             </VStack>
         </>
+    );
+}
+
+export function ErrorBoundary({ error }: { error: Error }) {
+    return (
+        <Box padding="space-16">
+            <Heading size="medium">Noe gikk galt</Heading>
+            <BodyShort>{error.message}</BodyShort>
+        </Box>
     );
 }

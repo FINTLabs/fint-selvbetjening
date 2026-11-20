@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import LinkWalkerIntegrationApi from '~/api/LinkWalkerIntegrationApi';
+import LinkWalkerIntegrationApi from '~/data/LinkWalkerIntegrationApi';
 
 import { loader } from './route';
 

@@ -241,6 +241,7 @@ export default function App({ loaderData }: Route.ComponentProps) {
                       ["Kontakter", "/admin/kontakter"],
                       ["Organisasjoner", "/admin/organisasjoner"],
                       ["Komponenter", "/admin/komponenter"],
+                      ["Integrasjoner", "/admin/integrasjoner"],
                   ]}
                   onMenuClick={(action) => navigate(action)}
               />
